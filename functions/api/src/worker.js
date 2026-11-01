@@ -1,5 +1,5 @@
-// POST /api/analyze  ->  { review, stars?, facts? }
-// Needs secret GEMINI_API_KEY (and optional GEMINI_MODEL) in Cloudflare Pages settings.
+// Cloudflare Worker: serves /api/analyze, everything else comes from the public/ folder.
+// Needs secret GEMINI_API_KEY (and optional GEMINI_MODEL) in the Worker's settings.
 
 const SYSTEM = `You help short-term rental hosts respond to a bad guest review.
 Rules:
@@ -18,7 +18,7 @@ const json = (obj, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 
-export async function onRequestPost({ request, env }) {
+async function analyze(request, env) {
   let body;
   try {
     body = await request.json();
@@ -71,3 +71,14 @@ export async function onRequestPost({ request, env }) {
     return json({ error: "The AI returned an unreadable answer. Try again." }, 502);
   }
 }
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname === "/api/analyze") {
+      if (request.method !== "POST") return json({ error: "Use POST." }, 405);
+      return analyze(request, env);
+    }
+    return env.ASSETS.fetch(request);
+  },
+};
