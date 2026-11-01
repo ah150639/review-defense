@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review Defense Kit for short-term rental hosts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef2f6;--panel:#fff;--ink:#1b2733;--muted:#5b6b7a;--line:#d3dce6;--accent:#0f4c81;--accent-ink:#fff;--low:#a4372a;--mid:#9a6a10;--high:#1f7a4d;--err:#a4372a}
+@media (prefers-color-scheme:dark){:root{--bg:#10171e;--panel:#18222c;--ink:#e6edf3;--muted:#93a4b3;--line:#2a3846;--accent:#6fb1ec;--accent-ink:#0b1722;--low:#ef8f82;--mid:#e0b25a;--high:#6fcf9b;--err:#ef8f82}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Schibsted Grotesk",system-ui,sans-serif;line-height:1.5}
+main{max-width:1040px;margin:0 auto;padding:40px 20px 64px}
+h1{font-size:clamp(28px,5vw,46px);line-height:1.1;font-weight:800;margin:0 0 12px;max-width:16ch}
+.sub{color:var(--muted);max-width:56ch;margin:0 0 32px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:24px;align-items:start}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
+label{display:block;font-weight:600;margin:0 0 6px}
+.hint{color:var(--muted);font-size:14px;margin:0 0 6px;font-weight:400}
+textarea,select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
+textarea{min-height:130px;resize:vertical}
+.field{margin-bottom:16px}
+button{font:inherit;font-weight:600;cursor:pointer;border-radius:8px;border:1px solid var(--accent);padding:10px 16px}
+.primary{background:var(--accent);color:var(--accent-ink);width:100%}
+.primary:disabled{opacity:.6;cursor:wait}
+.ghost{background:transparent;color:var(--accent);padding:6px 12px;font-size:14px}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.verdict{border-left:6px solid var(--line);padding:4px 0 4px 14px;margin-bottom:20px}
+.verdict.low{border-color:var(--low)}.verdict.medium{border-color:var(--mid)}.verdict.high{border-color:var(--high)}
+.verdict h2{margin:0;font-size:20px}
+.verdict p{margin:6px 0 0;color:var(--muted)}
+.block{margin-bottom:20px}
+.block-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.block h3{margin:0;font-size:16px}
+.text{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;font-size:15px}
+.check{margin:0;padding-left:18px;color:var(--muted);font-size:14px}
+.empty{color:var(--muted)}
+.error{color:var(--err);font-weight:600}
+.note{color:var(--muted);font-size:13px;margin-top:24px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Got a bad review? Know your options before you reply.</h1>
+  <p class="sub">Paste the review. You get a read on whether it can be reported, a removal request you can send, and a calm public reply if it stays up.</p>
+
+  <div class="grid">
+    <section class="panel" aria-label="Review details">
+      <div class="field">
+        <label for="review">Guest review</label>
+        <textarea id="review" placeholder="Paste the full review text here"></textarea>
+      </div>
+      <div class="field">
+        <label for="stars">Star rating</label>
+        <select id="stars">
+          <option value="">Not sure</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="facts">What actually happened <span class="hint">(optional, but it makes the draft better)</span></label>
+        <textarea id="facts" placeholder="Example: Guest checked in late, never contacted me about the heating, and left after one night."></textarea>
+      </div>
+      <button class="primary" id="go">Analyze this review</button>
+      <p class="note">Drafts only. Nothing is sent to your booking platform for you. Check the platform’s current review policy before you submit anything.</p>
+    </section>
+
+    <section class="panel" id="out" aria-live="polite">
+      <p class="empty">Your results will show up here.</p>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const out = $("out"), btn = $("go");
+
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function block(title, text) {
+  return `<div class="block"><div class="block-head"><h3>${title}</h3>
+  <button class="ghost" data-copy>Copy</button></div><div class="text">${esc(text)}</div></div>`;
+}
+
+function render(d) {
+  const lvl = ["low", "medium", "high"].includes(d.removal_chance) ? d.removal_chance : "low";
+  const label = { low: "Removal is unlikely", medium: "Removal is possible", high: "Removal looks plausible" }[lvl];
+  const checks = Array.isArray(d.check_before_sending) ? d.check_before_sending : [];
+  out.innerHTML =
+    `<div class="verdict ${lvl}"><h2>${label}</h2><p><strong>${esc(d.category)}.</strong> ${esc(d.why)}</p></div>` +
+    block("Removal request", d.removal_request) +
+    block("Public reply", d.public_reply) +
+    (checks.length ? `<div class="block"><h3>Check before you send</h3><ul class="check">${checks.map((c) => `<li>${esc(c)}</li>`).join("")}</ul></div>` : "");
+}
+
+out.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-copy]");
+  if (!b) return;
+  try {
+    await navigator.clipboard.writeText(b.closest(".block").querySelector(".text").textContent);
+    b.textContent = "Copied";
+    setTimeout(() => (b.textContent = "Copy"), 1500);
+  } catch { b.textContent = "Select and copy manually"; }
+});
+
+btn.addEventListener("click", async () => {
+  const review = $("review").value.trim();
+  if (review.length < 20) { out.innerHTML = `<p class="error">Paste the full review first (at least 20 characters).</p>`; return; }
+  btn.disabled = true; btn.textContent = "Analyzing…";
+  out.innerHTML = `<p class="empty">Reading the review…</p>`;
+  try {
+    const r = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ review, stars: $("stars").value, facts: $("facts").value }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Something went wrong.");
+    render(d);
+  } catch (err) {
+    out.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Analyze this review";
+  }
+});
+</script>
+</body>
+</html>
